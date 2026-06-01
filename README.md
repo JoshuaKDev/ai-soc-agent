@@ -1,6 +1,6 @@
 # AI SOC Agent
 
-An AI-powered Security Operations Center (SOC) assistant designed to help analysts triage alerts, investigate suspicious activity, and accelerate incident response workflows.
+An AI-powered Security Operations Center (SOC) assistant designed to help analysts triage alerts, investigate suspicious activity, and accelerate incident response workflows. This project is in early stages and made with data from the cyber range.
 
 ## Overview
 
