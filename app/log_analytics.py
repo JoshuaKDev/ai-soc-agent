@@ -5,36 +5,51 @@ import pandas as pd
 
 LOG_ANALYTICS_WORKSPACE_ID = "60c7f53e-249a-4077-b68e-55a4ae877d7c"
 
+TABLE_NAME = "AzureActivity" # DeviceLogonEvents, AzureNetworkAnalytics_CL, AzureActivity, SigninLogs
+
+FIELDS = {
+    "DeviceLogonEvents": "TimeGenerated, AccountName, DeviceName, ActionType, RemoteIP, RemoteDeviceName",
+    "AzureNetworkAnalytics_CL": "TimeGenerated, FlowType_s, SrcPublicIPs_s, DestIP_s, DestPort_d, VM_s, AllowedInFlows_d, AllowedOutFlows_d, DeniedInFlows_d, DeniedOutFlows_d",
+    "AzureActivity": "TimeGenerated, OperationNameValue, ActivityStatusValue, ResourceGroup, Caller, CallerIpAddress, Category",
+    "SigninLogs": "TimeGenerated, UserPrincipalName, OperationName, Category, ResultSignature, ResultDescription, AppDisplayName, IPAddress, LocationDetails"
+}
+
+HOURS_AGO = 1
+
+# Need Azure CLI: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&pivots=msi
 log_analytics_client = LogsQueryClient(credential=DefaultAzureCredential())
 
-hours_ago = 1
 
-kql_query = f'''
-DeviceLogonEvents
-| take 10
-'''
-        
-response = log_analytics_client.query_workspace(
-    workspace_id=LOG_ANALYTICS_WORKSPACE_ID,
-    query=kql_query,
-    timespan=timedelta(hours=hours_ago)
-)
+def query_log_analytics(client, workspace_id, table, fields, timespan_hours_ago):
 
-# Extract the table
-table = response.tables[0]
+    kql_query = f'''
+    {table}
+    | project {fields}
+    '''
 
-if len(response.tables[0].rows) == 0:
+    print(kql_query)
+            
+    response = client.query_workspace(
+        workspace_id=workspace_id,
+        query=kql_query,
+        timespan=timedelta(hours=timespan_hours_ago)
+    )
+
+    # Extract the table
+    table_results = response.tables[0]
+
+    return table_results
+
+results = query_log_analytics(log_analytics_client, LOG_ANALYTICS_WORKSPACE_ID, TABLE_NAME, FIELDS[TABLE_NAME], HOURS_AGO)
+
+if len(results.rows) == 0:
     print("No data returned from Log Analytics.")
     exit
 
 
-
-# TODO: Handle if returns 0 events
-record_count = len(response.tables[0].rows)
-
 # Extract columns and rows using dot notation
-columns = table.columns  # Already a list of strings
-rows = table.rows        # List of row data
+columns = results.columns  # Already a list of strings
+rows = results.rows        # List of row data
 
 df = pd.DataFrame(rows, columns=columns)
 records = df.to_csv(index=False)
