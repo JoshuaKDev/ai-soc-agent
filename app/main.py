@@ -9,7 +9,7 @@ from azure.monitor.query import LogsQueryClient
 
 # Local modules + MCP
 import UTILITIES
-import keys
+import app._keys as _keys
 import MODEL_MANAGEMENT
 import PROMPT_MANAGEMENT
 import EXECUTOR
@@ -114,5 +114,3 @@ input(f"Press {Fore.LIGHTGREEN_EX}[Enter]{Fore.WHITE} or {Fore.LIGHTGREEN_EX}[Re
 
 # Display the threat hunt analysis results.
 UTILITIES.display_threats(threat_list=hunt_results['findings'])
-
-
