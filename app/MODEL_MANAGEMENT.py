@@ -5,7 +5,7 @@ import GUARDRAILS
 # ---- Settings ---------------------------------------------------------------
 
 # https://platform.openai.com/settings/organization/limits
-CURRENT_TIER = "1"  # Valid: "free", "1", "2", "3", "4", "5"
+CURRENT_TIER = "1"  # "free", "1", "2", "3", "4", "5" 
 DEFAULT_MODEL = "gpt-5-mini"
 WARNING_RATIO = 0.80  # 80%
 
