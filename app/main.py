@@ -9,7 +9,7 @@ from azure.monitor.query import LogsQueryClient
 
 # Local modules + MCP
 import UTILITIES
-import app._keys as _keys
+import _keys
 import MODEL_MANAGEMENT
 import PROMPT_MANAGEMENT
 import EXECUTOR
@@ -29,19 +29,16 @@ model = MODEL_MANAGEMENT.DEFAULT_MODEL
 
 # Get the message from the user (What do you wan to hunt for?)
 user_message = PROMPT_MANAGEMENT.get_user_message() #TODO: Remove comment
-# user_message = {"role": "user", "content": "Something is messed up in our AAD/Entra ID for the last 2 weeks or so. particularly about user arisa"}
+# Example: I'm worried that windows-target-1 might have been maliciously logged into in the last few days
 
 # return an object that describes the user's request as well as where and how the agent has decided to search
-unformatted_query_context = EXECUTOR.get_log_query_from_agent(openai_client, user_message, model=model)
+unformatted_query_context = EXECUTOR.get_query_context(openai_client, user_message, model=model)
 
 # sanitizing unformatted_query_context values, and normalizing field formats.
 query_context = UTILITIES.sanitize_query_context(unformatted_query_context)
 
 # Show the user where we are going to search based on their request
 UTILITIES.display_query_context(query_context)
-
-# Explain to the user the rationale for the what is about to be searched
-UTILITIES.display_query_context_rationale(query_context)
 
 # Ensure the table and fields returned by the model are allowed to be queried
 GUARDRAILS.validate_tables_and_fields(query_context["table_name"], query_context["fields"])
@@ -114,3 +111,52 @@ input(f"Press {Fore.LIGHTGREEN_EX}[Enter]{Fore.WHITE} or {Fore.LIGHTGREEN_EX}[Re
 
 # Display the threat hunt analysis results.
 UTILITIES.display_threats(threat_list=hunt_results['findings'])
+
+token = EXECUTOR.get_bearer_token()
+
+machine_is_isolated = False
+user_account_is_disabled = False
+
+query_is_about_individual_host = query_context["about_individual_host"]
+query_is_about_individual_user = query_context["about_individual_user"]
+query_is_about_network_security_group = query_context["about_network_security_group"]
+machine_is_isolated = False
+
+for threat in hunt_results['findings']:
+
+    # Assess the confidence of the threat
+    threat_confidence_is_high = threat["confidence"].lower() == "high"
+    
+    # Block of code for dealing with host-related threats
+    if query_is_about_individual_host:
+        
+        
+        # If the machine is already isolated, don't isolate it again in the same session (wastes API calls)
+        if threat_confidence_is_high and (not machine_is_isolated):
+
+            print(Fore.YELLOW + "[!] High confidence threat detected on host:" + Style.RESET_ALL, query_context["device_name"])
+            print(Fore.LIGHTRED_EX + threat['title'])
+            confirm = input(f"{Fore.RED}{Style.BRIGHT}Would you like to isolate this VM? (yes/no): " + Style.RESET_ALL).strip().lower()
+            
+            if confirm.startswith("y"):
+                machine_id = EXECUTOR.get_mde_workstation_id_from_name(
+                    token=token,
+                    device_name=query_context["device_name"]
+                )
+                machine_is_isolated = EXECUTOR.quarantine_virtual_machine(
+                    token=token,
+                    machine_id=machine_id
+                )
+                if machine_is_isolated:
+                    print(Fore.GREEN + "[+] VM successfully isolated." + Style.RESET_ALL)
+                    print(Fore.CYAN + "Reminder: Release the VM from isolation when appropriate at: " + Style.RESET_ALL + "https://security.microsoft.com/")
+            else:
+                print(Fore.CYAN + "[i] Isolation skipped by user." + Style.RESET_ALL)
+            
+    # Block of code for dealing with user related threats
+    elif query_is_about_individual_user:
+        pass
+
+    # Block of code for dealing with NSG related threats
+    elif query_is_about_network_security_group:
+        pass
