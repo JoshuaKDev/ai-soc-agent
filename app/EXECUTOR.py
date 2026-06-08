@@ -6,9 +6,78 @@ import json
 import pandas as pd
 from colorama import Fore, Style
 from openai import RateLimitError, OpenAIError
+from azure.identity import DefaultAzureCredential
+import requests, urllib.parse
+
 
 # Local modules
+# Local modules
 import PROMPT_MANAGEMENT
+
+
+def get_bearer_token():
+    credential = DefaultAzureCredential()
+    token = credential.get_token("https://api.securitycenter.microsoft.com/.default")
+    return token
+
+def get_mde_workstation_id_from_name(token, device_name):
+    """
+    Look up a Defender for Endpoint machine ID by device name.
+    Works if the user provides either the FQDN or just the short hostname.
+    
+    Args:
+        token: an Azure Identity token (DefaultAzureCredential or similar)
+        device_name: short hostname or full FQDN string
+
+    Returns:
+        The machine ID (string)
+
+    Raises:
+        Exception if no matches are found.
+    """
+    headers = {"Authorization": f"Bearer {token.token}"}
+
+    # Use 'startswith' so "linux-target-1" will match
+    # "linux-target-1.p2zfvso05mlezjev3ck4vqd3kd.cx.internal.cloudapp.net"
+    filter_q = urllib.parse.quote(f"startswith(computerDnsName,'{device_name}')")
+    url = f"https://api.securitycenter.microsoft.com/api/machines?$filter={filter_q}"
+
+    resp = requests.get(url, headers=headers, timeout=30)
+    resp.raise_for_status()
+
+    machines = resp.json().get("value", [])
+    if not machines:
+        raise Exception(f"No machine found starting with {device_name}")
+
+    # If multiple machines match, pick the first. 
+    # You could add logic here (e.g., choose the most recent 'lastSeen').
+    machine_id = machines[0]["id"]
+    return machine_id
+
+
+def quarantine_virtual_machine(token, machine_id):
+
+    headers = {
+        "Authorization": f"Bearer {token.token}",
+        "Content-Type": "application/json"
+    }
+
+    # Example: Isolate a machine
+    payload = {
+        "Comment": "Isolation via Python Agentic AI using DefaultAzureCredential",
+        "IsolationType": "Full"
+    }
+
+    resp = requests.post(
+        f"https://api.securitycenter.microsoft.com/api/machines/{machine_id}/isolate",
+        headers=headers,
+        json=payload,
+        timeout=30
+    )
+
+    if resp.status_code == 201 or 200:
+        return True
+    return False
 
 def hunt(openai_client, threat_hunt_system_message, threat_hunt_user_message, openai_model):
     """
@@ -61,7 +130,7 @@ def hunt(openai_client, threat_hunt_system_message, threat_hunt_user_message, op
 # In this case, the function selected queries log data from Microsoft Defender via Log Analytics.
 #
 # Docs: https://platform.openai.com/docs/guides/function-calling
-def get_log_query_from_agent(openai_client, user_message, model):
+def get_query_context(openai_client, user_message, model):
     
     print(f"{Fore.LIGHTGREEN_EX}\nDeciding log search parameters based on user request...\n")
 
